@@ -16,12 +16,28 @@
 '''
 Source of syscall json files: https://syscall.sh/
 To download via API:
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls1/arm'   -H 'accept: application/json' > arm.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls1/arm64'   -H 'accept: application/json' > arm64.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls1/x86'   -H 'accept: application/json' > x86.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls1/x64'   -H 'accept: application/json' > x64.json
+curl -X 'GET' \
+  'https://api.syscall.sh/v1/syscalls/arm' \
+  -H 'accept: application/json' > arm.json
+
+curl -X 'GET' \
+  'https://api.syscall.sh/v1/syscalls/arm64' \
+  -H 'accept: application/json' > arm64.json
+
+curl -X 'GET' \
+  'https://api.syscall.sh/v1/syscalls/x86' \
+  -H 'accept: application/json' > x86.json
+
+curl -X 'GET' \
+  'https://api.syscall.sh/v1/syscalls/x64' \
+  -H 'accept: application/json' > x64.json
+
+
+
+
 '''
 
+import sys
 # Not needed within the ghidra framework but kept for reference when using python console to test stuff.
 import ghidra
 # from ghidra.program.flatapi import FlatProgramAPI as FA
@@ -32,13 +48,51 @@ import json
 
 
 ### FUNCTIONS###
-def arm_oabi_to_arm_eabi(syscall_op):
-    """ older abi used swi 0x900000 + syscall.  Returns eabi syscall """
-    syscall_op = int(syscall_op, 16)
+def parse_languageID(program):
+    """ Takes language ID parses it. Returns associated register(list), json filename, and language """
 
-    eabi = hex(oabi - 0x900000)
-    return eabi
+    json_file_dict = {'ARM': 'arm.json', 'AARCH64': 'arm64.json', 'x86': 'x86.json', 'x64': 'x64.json'}
+    language_register_dict = {'ARM': ['r7'], 'AARCH64': ['x8'], 'x86': ['EAX'], 'x64': ['RAX', 'EAX']}
+    language_id = str(program.getLanguageID()).split(':')  # example lang_id (split) ['ARM', 'LE', '32', 'v8']
+    processor = language_id[0]
+    bits = language_id[2]
 
+    #Build exceptions as they are found loading binaries in Ghidra.
+    #Ghidra x86:LE:64:default
+    if processor == 'x86' and bits == '64':
+        language = 'x64'
+        register = language_register_dict[language]
+        json_file = json_file_dict[language]
+    else:
+        language = processor
+        try:
+            register = language_register_dict[language]
+            json_file = json_file_dict[language]
+        except KeyError as e:
+            print("\nCould not identify language.  Currently supported languages: ARM, AARCH64, x86, x64\n")
+            print(e)
+            sys.exit(1)
+    return register, json_file, language
+
+
+def check_syscall_file_path(json_filename):
+    """Check that syscall path and file exist. Print message and exit if path does not exist.  Returns full file path"""
+
+    ghidra_dir = os.getcwd()
+    syscall_dir = os.path.join(ghidra_dir, 'syscall')
+    full_path_file = os.path.join(syscall_dir, json_filename)
+
+    # Check for existence of syscall directory.  Print message and exit if directory does not exist
+    if os.path.isdir(syscall_dir) is False:
+        print('\n **** Please create "syscall" directory in {} and copy json files there. ****').format(ghidra_dir)
+        sys.exit(1)
+        #  Check for existence of json file.  Print message and exit if file does not exist
+    elif os.path.exists(full_path_file) is False:
+        print('\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n').format(
+            json_filename, json_filename, syscall_dir)
+        sys.exit(1)
+    else:
+        return full_path_file
 
 def json_to_dict(syscall_file):
     new_dict = {}
@@ -50,79 +104,57 @@ def json_to_dict(syscall_file):
             new_dict[key] = value
     return new_dict
 
-
-def find_syscall_name(new_dict, reg_hex_value):
-    """ map syscall hex value to syscall name and return tuple with key, value """
+def arm_oabi_to_arm_eabi(syscall_op):
+    """ older abi used swi 0x900000 + syscall.  Returns eabi syscall string """
+    syscall_op = int(syscall_op, 16)
+    eabi = hex(syscall_op - 0x900000)
+    return eabi
+def find_syscall_name(new_dict, syscall_value):
+    """ map syscall hex value to syscall name. Returns syscall name """
     try:
-        sys_name = new_dict[reg_hex_value]
+        syscall_name = new_dict[syscall_value]
     except KeyError:
-        sys_name = 'unknown'
+        syscall_name = 'unknown'
+    return syscall_name
 
-    return sys_name
-
-
-def parse_languageID(program):
-    """ Takes language ID parses it and returns register used for syscall value based on architecture
-     and json file name for conversion to dictionary """
-    language_id = str(program.getLanguageID()).split(':')  # example lang_id (split) ['ARM', 'LE', '32', 'v8']
-    language = language_id[0]
-    json_file_list = ['arm.json', 'arm64.json', 'x86.json', 'x64.json']
-
-    if language == 'ARM':
-        reg = 'r7'
-        json_file = json_file_list[0]
-    elif language == 'AARCH64':
-        reg = 'x8'
-        json_file = json_file_list[1]
-    elif language == 'x86':
-        reg = 'eax'
-        json_file = json_file_list[2]
-    elif language == 'x64':
-        reg = 'rax'
-        json_file = json_file_list[3]
-    else:
-        reg = None
-        json_file = None
-
-    if reg is None or json_file is None:
-        print("\nCould not identify language.  Currently supported languages: ARM, AARCH64, x86, x64")
-        exit(1)
-
-    return reg, json_file, language
-
-
-def parse_operands(operands, address):
+def determine_and_clean_operand_type(operands, address,language):
     """ parses operands for syscall strings to determine if immediate value, pointer or other.
-    Returns 'immediate' for immediate value, 'pointer' for pointer, 'other' for other. """
+    Returns 'immediate' for immediate value, 'pointer' for pointer, 'other'. """
     # Convert operands object to string and split
     operands_list = str(operands).split(',')
     if len(operands_list) > 2:
-        print('\noperand length greater than 2. No comments added.  Please review manually.')
-        print'{} at address {}\n'.format(operands, address)
+        print("\nOperand length greater than 2. No comments added.  Please review manually.")
+        print "{} at address {}\n".format(operands, address)
     # else if only 1 operand
     else:
-        # if immediate value contains #
-        if '#' in operands_list[1]:
-            clean_key = clean_immediate_value(operands_list[1])
+        if language == 'ARM':
+            # Check first character of string to see if prepended with '#'
+            if '#' in operands_list[1][0:1]:
+                # check length of hex value.  Prepend 0 if length is 1 to match json file.
+                clean_key = format_immediate_value(operands_list[1])
+                # old ARM syntax is 0x900000 + syscall. Check to if that is the case.
+                if int(clean_key, 16) >= (int(0x900000)):
+                    # clean value by subtracting 0x900000, return eabi syscall value
+                    clean_key = arm_oabi_to_arm_eabi(clean_key)
+                return 'immediate', clean_key
+        elif '0x' in operands_list[1][0:2]:
+            # check length of hex value.  Prepend 0 if length is 1 to match json file.
+            clean_key = format_immediate_value(operands_list[1])
             return 'immediate', clean_key
         # if pointer that needs to be dereferenced
-        elif '[' in operands_list[1]:
+        elif '[' in operands_list[1][0:1]:
             print('\n**** This value may need to be dereferenced manually. TODO for next version ****\n')
             return 'pointer', None
         else:
             return 'other', None
 
 
-def create_comments(current_address, hex_num, syscall_name, operand_len):
+def create_comments(current_address, hex_num, syscall_name, op_type):
     """ modify EOL comment based on syscall mapping """
-    # operand_len added for future coding.  Determine what comment to put when not a single mov into register.
-
     # checks if comment exists, appends if so
     comment_exists = getEOLComment(current_address)
-    if comment_exists is None:
-        new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
-        setEOLComment(current_address, new_comment)
-    else:
+
+    if comment_exists is not None:
         original_comment = getEOLComment(current_address)
         if 'syscall: ' in original_comment:
             pass
@@ -130,9 +162,11 @@ def create_comments(current_address, hex_num, syscall_name, operand_len):
             appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
             new_comment = original_comment + ' - ' + appended_comment
             setEOLComment(current_address, new_comment)
+    else:
+        new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
+        setEOLComment(current_address, new_comment)
 
-
-def clean_immediate_value(hex_string):
+def format_immediate_value(hex_string):
     """Some low hex values are a single hex character but the dictionary key is expecting 2 hex characters.
     I.E. Ghidra #0x0, dict key: 0x00 returns formatted hex value."""
 
@@ -148,75 +182,60 @@ def clean_immediate_value(hex_string):
 
     return syscall_hex_key
 
+def main():
+    program = getCurrentProgram()
+    af = program.getAddressFactory()
+    func = getFirstFunction()
+    start_addr = af.getAddress(str(func.getEntryPoint()))
+    first_instruction = getInstructionAt(start_addr)
+    instruction = first_instruction.getNext()
 
-###CODE SECTION###
+    # determine architecture using languageID.
+    lang_id = parse_languageID(program)
+    # register value (list)
+    registers = lang_id[0]
+    # json filename
+    json_filename = lang_id[1]
+    # language
+    language = lang_id[2]
+    valid_languages = ['ARM', 'AARCH64', 'x86', 'x64']
 
-program = getCurrentProgram()
-af = program.getAddressFactory()
-func = getFirstFunction()
-start_addr = af.getAddress(str(func.getEntryPoint()))
-instruction = getInstructionAt(start_addr)
+    if language in valid_languages:
+        # Check that path and file exist. Return full file path if True.  Print message and exit if False.
+        full_file_path = check_syscall_file_path(json_filename)
+        # convert json file to dictionary
+        syscall_dictionary = json_to_dict(full_file_path)
+        # valid mnemonic strings
+        valid_mnemonic = ['swi', 'SWI', 'svc', 'SVC', 'int', 'INT', 'syscall', 'SYSCALL']
 
-# determine architecture using languageID.
-lang_id = parse_languageID(program)
+        while instruction is not None:
+            mnemonic = instruction.getMnemonicString()
+            current_address = instruction.getAddress()
+            previous_operands = instruction.getPrevious()
+            previous_address = previous_operands.getAddress()
 
-# register value depends on language ID of binary
-register = lang_id[0]
-# json filename to use for language
-json_filename = lang_id[1]
-
-language = lang_id[2]
-
-# syscall dir expected in ghidra directory
-syscall_dir = os.path.join(os.getcwd(), 'syscall')
-full_path_file = os.path.join(syscall_dir, json_filename)
-
-# convert json file to dictionary
-syscall_dictionary = json_to_dict(full_path_file)
-# valid mnemonic strings
-valid_mnemonic = ['swi', 'svc', 'int', 'syscall']
-valid_languages = ['ARM', 'AARCH64', 'x86', 'x64']
-
-# Check for existence of syscall directory.  Print message and exit if directory does not exist
-if os.path.isdir(syscall_dir) is False:
-    print('\n **** Please create "syscall" directory in {} and copy json files there. ****').format(os.getcwd())
-    exit(1)
-else:
-    #  Check for existence of json file.  Print message and exit if file does not exist
-    if os.path.exists(full_path_file) is False:
-        print('\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n').format(
-            json_filename, json_filename, syscall_dir)
-        exit(1)
-
-while instruction is not None:
-    mnemonic = instruction.getMnemonicString()
-    current_address = instruction.getAddress()
-    previous_address = instruction.getPrevious()
-    previous_operands = getInstructionAt(previous_address)
-
-    if mnemonic in valid_mnemonic:
-        if language in valid_languages:
-            if language == 'ARM' or language == 'AARCH64':
-                syscall_list = str(instruction).split(' ')
-                #TODO
-                old_syscall_base = int(syscall_list[1],16)
-                if syscall_list[1]
-                ##TO DO if mnemonic is swi we need to check that it's not 0x0 and that it's greater than or = to 900000
-                if register in str(previous_operands):
-                    op_info_clean_key = parse_operands(previous_operands, previous_address)  # parse_operands function call
-
-                    try:
-                        if op_info_clean_key[0] == 'immediate':  # if immediate value.
-                            syscall_hex = clean_immediate_value(op_info_clean_key[1], language)
-
-                            syscall_name = find_syscall_name(syscall_dictionary, syscall_hex)
-
-                            create_comments(current_address, syscall_hex, syscall_name,
-                                            op_info_clean_key[0])  # create comment function call
-                        else:  # if anything but 'immediate' value simply append to list and report count at end of script #TODO
-                            syscalls1_not_reg_previous.append(str(current_address))
-                    except TypeError as e:
-                        print(op_info_clean_key)
-                        print(previous_operands)
+            if mnemonic in valid_mnemonic:
+                # if multiple registers are possible. I.E. RAX and EAX
+                for register in registers:
+                    if register in str(previous_operands):
+                        # determine op type.  Immediate, pointer, other
+                        op_type = determine_and_clean_operand_type(previous_operands,
+                                                                   previous_address, language)
+                        try:
+                            if op_type[0] == 'immediate':  # if immediate value.
+                                syscall_hex_str = op_type[1]
+                                syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                create_comments(current_address, syscall_hex_str, str(syscall_name), op_type[0])
+                        except TypeError as e:
+                            print(op_type)
+                            print(previous_operands)
+                            print(syscall_name)
+                            continue
+                    else:
                         continue
-    instruction = instruction.getNext()
+            instruction = instruction.getNext()
+    else:
+        print("You have to give a message saying that the language is not supported.  Try except? ")
+
+if __name__ == '__main__':
+    main()
