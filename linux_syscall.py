@@ -5,14 +5,6 @@
 # @menupath
 # @toolbar
 
-# version 0.2 April 11 10:03 A.M. comments work for ARM32.  Still need to cleanup print statements
-# created function for swi 0x900000 not implemented in code yet.
-# TODO:  Add special case where swi 0x900000 <- substract 90000? hex to get syscall
-
-###How to derefence pointers for registers
-###go back up to 3 instructions (in the future). Worth it?
-
-
 '''
 Source of syscall json files: https://syscall.sh/
 To download via API:
