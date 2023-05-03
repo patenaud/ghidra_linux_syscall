@@ -113,23 +113,27 @@ def determine_and_clean_operand_type(operands, address,language):
             return 'other', None
 
 
-def create_comments(current_address, hex_num, syscall_name, op_type):
+def create_comments(current_address, op_type, syscall_name=None, hex_num=None):
     """ modify EOL comment based on syscall mapping """
     # checks if comment exists, appends if so
     comment_exists = getEOLComment(current_address)
-
-    if comment_exists is not None:
-        original_comment = getEOLComment(current_address)
-        if 'syscall: ' in original_comment:
-            pass
+    # if immediate value
+    if op_type == 'immediate':
+        if comment_exists is not None:
+            original_comment = getEOLComment(current_address)
+            if 'syscall: ' in original_comment:
+                pass
+            else:
+                appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
+                new_comment = original_comment + ' - ' + appended_comment
+                setEOLComment(current_address, new_comment)
         else:
-            appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
-            new_comment = original_comment + ' - ' + appended_comment
+            new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
             setEOLComment(current_address, new_comment)
+    # If not immediate value
     else:
-        new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
+        new_comment = 'syscall: Unable to determine. Review manually'
         setEOLComment(current_address, new_comment)
-
 def format_immediate_value(hex_string):
     """Some low hex values are a single hex character but the dictionary key is expecting 2 hex characters.
     I.E. Ghidra #0x0, dict key: 0x00 returns formatted hex value."""
@@ -146,13 +150,15 @@ def format_immediate_value(hex_string):
 
     return syscall_hex_key
 
+def build_stats():
+    pass
+
 def main():
     program = getCurrentProgram()
     af = program.getAddressFactory()
     func = getFirstFunction()
     start_addr = af.getAddress(str(func.getEntryPoint()))
-    first_instruction = getInstructionAt(start_addr)
-    instruction = first_instruction.getNext()
+    instruction = getInstructionAt(start_addr)
 
     # determine architecture using languageID.
     lang_id = parse_languageID(program)
@@ -189,7 +195,10 @@ def main():
                             if op_type[0] == 'immediate':  # if immediate value.
                                 syscall_hex_str = op_type[1]
                                 syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
-                                create_comments(current_address, syscall_hex_str, str(syscall_name), op_type[0])
+                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                            else:
+                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+
                         except TypeError as e:
                             print(op_type)
                             print(previous_operands)

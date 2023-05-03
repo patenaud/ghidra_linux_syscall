@@ -74,6 +74,10 @@ and selecting ->  Window > Comments
 The comments have the following syntax: "syscall:" <operand> - <syscall name>
 I.E.  syscall: 0x29 - socket
 
+If unable to determine the syscall.  The following comment will appear:
+"syscall: Unable to determine. Review manually"
+
+
 
 
 
