@@ -11,8 +11,8 @@ import os
 import json
 
 
-### FUNCTIONS###
-def parse_languageID(program):
+# FUNCTIONS
+def parse_languageid(program):
     """ Takes language ID parses it. Returns associated register(list), json filename, and language """
 
     json_file_dict = {'ARM': 'arm.json', 'AARCH64': 'arm64.json', 'x86': 'x86.json', 'x64': 'x64.json'}
@@ -21,8 +21,8 @@ def parse_languageID(program):
     processor = language_id[0]
     bits = language_id[2]
 
-    #Build exceptions as they are found loading binaries in Ghidra.
-    #Ghidra x86:LE:64:default
+    # Build exceptions as they are found loading binaries in Ghidra.
+    # Ghidra x86:LE:64:default
     if processor == 'x86' and bits == '64':
         language = 'x64'
         register = language_register_dict[language]
@@ -48,17 +48,19 @@ def check_syscall_file_path(json_filename):
 
     # Check for existence of syscall directory.  Print message and exit if directory does not exist
     if os.path.isdir(syscall_dir) is False:
-        print('\n **** Please create "syscall" directory in {} and copy json files there. ****').format(ghidra_dir)
+        print'\n **** Please create "syscall" directory in {} and copy json files there. ****'.format(ghidra_dir)
         sys.exit(1)
         #  Check for existence of json file.  Print message and exit if file does not exist
     elif os.path.exists(full_path_file) is False:
-        print('\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n').format(
+        print'\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n'.format(
             json_filename, json_filename, syscall_dir)
         sys.exit(1)
     else:
         return full_path_file
 
+
 def json_to_dict(syscall_file):
+    """converts json file to dictionary.  Returns dictionary"""
     new_dict = {}
     with open(syscall_file) as json_file:
         data = json.load(json_file)
@@ -68,22 +70,28 @@ def json_to_dict(syscall_file):
             new_dict[key] = value
     return new_dict
 
+
 def arm_oabi_to_arm_eabi(syscall_op):
-    """ older abi used swi 0x900000 + syscall.  Returns eabi syscall string """
+    """ oabi used swi 0x900000 + syscall.  Returns eabi syscall string """
     syscall_op = int(syscall_op, 16)
     eabi = hex(syscall_op - 0x900000)
     return eabi
+
+
 def find_syscall_name(new_dict, syscall_value):
-    """ map syscall hex value to syscall name. Returns syscall name """
+    """ Mapa syscall hex value to syscall name. Returns syscall name """
     try:
         syscall_name = new_dict[syscall_value]
     except KeyError:
         syscall_name = 'unknown'
     return syscall_name
 
-def determine_and_clean_operand_type(operands, address,language):
-    """ parses operands for syscall strings to determine if immediate value, pointer or other.
-    Returns 'immediate' for immediate value, 'pointer' for pointer, 'other'. """
+
+def determine_and_clean_operand_type(operands, address, language):
+    """ Parses operands for syscall strings to determine if immediate value, pointer or other.
+    Also formats hex values below 0x0A that only have a length of 1 I.E. (0x0) to (0x00) to adhere
+    to the format in the json files by calling function format_immediate_value()
+    Returns tuple with 'immediate' for immediate value, 'pointer' for pointer, 'other' and clean_key/None. """
     # Convert operands object to string and split
     operands_list = str(operands).split(',')
     if len(operands_list) > 2:
@@ -114,7 +122,7 @@ def determine_and_clean_operand_type(operands, address,language):
 
 
 def create_comments(current_address, op_type, syscall_name=None, hex_num=None):
-    """ modify EOL comment based on syscall mapping """
+    """ Modifies EOL comment based on syscall mapping. """
     # checks if comment exists, appends if so
     comment_exists = getEOLComment(current_address)
     # if immediate value
@@ -134,6 +142,8 @@ def create_comments(current_address, op_type, syscall_name=None, hex_num=None):
     else:
         new_comment = 'syscall: Unable to determine. Review manually'
         setEOLComment(current_address, new_comment)
+
+
 def format_immediate_value(hex_string):
     """Some low hex values are a single hex character but the dictionary key is expecting 2 hex characters.
     I.E. Ghidra #0x0, dict key: 0x00 returns formatted hex value."""
@@ -150,8 +160,6 @@ def format_immediate_value(hex_string):
 
     return syscall_hex_key
 
-def build_stats():
-    pass
 
 def main():
     program = getCurrentProgram()
@@ -161,7 +169,7 @@ def main():
     instruction = getInstructionAt(start_addr)
 
     # determine architecture using languageID.
-    lang_id = parse_languageID(program)
+    lang_id = parse_languageid(program)
     # register value (list)
     registers = lang_id[0]
     # json filename
@@ -191,24 +199,20 @@ def main():
                         # determine op type.  Immediate, pointer, other
                         op_type = determine_and_clean_operand_type(previous_operands,
                                                                    previous_address, language)
-                        try:
-                            if op_type[0] == 'immediate':  # if immediate value.
-                                syscall_hex_str = op_type[1]
-                                syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
-                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-                            else:
-                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-
-                        except TypeError as e:
-                            print(op_type)
-                            print(previous_operands)
-                            print(syscall_name)
-                            continue
+                        if op_type[0] == 'immediate':  # if immediate value.
+                            syscall_hex_str = op_type[1]
+                            syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                            create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                        else:
+                            syscall_name = None
+                            syscall_hex_str = None
+                            create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
                     else:
                         continue
             instruction = instruction.getNext()
     else:
         print("You have to give a message saying that the language is not supported.  Try except? ")
+
 
 if __name__ == '__main__':
     main()
