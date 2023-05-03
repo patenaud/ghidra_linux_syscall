@@ -50,14 +50,29 @@ Setup
 	'https://api.syscall.sh/v1/syscalls/x64' \
 	-H 'accept: application/json' > x64.json
 
-- Creating new script in Ghidra.
+
+- Add script in Ghidra
 
 From the top menu select;
 - Window > Script Manager
 - In the Ghidra Script Manager click the "Script Directories" icon in the toolbar and add the checked out repository as a path.
   The script will appear in the "Syscall_linux_comments" category.
 
+Usage
 
+- Navigate to the "Syscall_linux_comments" category
+- Right click on "linux_syscall.py"
+- Select "Run Script"
+
+- Any information or message will appear in the Console window.
+
+Viewing comments
+
+The EOL (End of line) comments can be viewed by going to the top menu
+and selecting ->  Window > Comments
+
+The comments have the following syntax: "syscall:" <operand> - <syscall name>
+I.E.  syscall: 0x29 - socket
 
 
 
