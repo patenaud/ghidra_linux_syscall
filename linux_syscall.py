@@ -121,7 +121,7 @@ def determine_and_clean_operand_type(operands, address, language):
             return 'other', None
 
 
-def create_comments(current_address, op_type, syscall_name=None, hex_num=None):
+def create_comments(current_address, op_type, syscall_name, hex_num):
     """ Modifies EOL comment based on syscall mapping. """
     # checks if comment exists, appends if so
     comment_exists = getEOLComment(current_address)
@@ -203,6 +203,7 @@ def main():
                             syscall_hex_str = op_type[1]
                             syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
                             create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                        # Pointers and other types will be dealt with later.
                         else:
                             syscall_name = None
                             syscall_hex_str = None
