@@ -1,10 +1,64 @@
-Ghidra_linux_syscall
+Purpose
+
+I wrote this python script to automate the commenting of syscalls in stripped linux elf binaries to help with the
+initial static analysis.
+
+Limitations
+
+At the moment;
+- it only supports the following processors: ARM, AARCH64, x86, and x64
+- it only checks the previous instruction before the syscall.
+- it only comments immediate syscall values.  I.E.  No dereference of pointers, etc.
+
+TO DO
+
+- expand the backward checks from the syscall for immediate values
+- Add reporting on instructions found but not commented so they can be manually reviewed.
+
+Dependencies
+
+- Ghidra
+- curl
+
+Setup
+
+- cd to ghidra
+	cd ghidra_xx.x.x_PUBLIC/
+- create directory syscall
+	mkdir syscall
+- download or copy (if previously downloaded) the json files to the syscall directory
+	Download the syscall json files from https://syscall.sh/.  See below for details
+	on how to use curl to create the json file.
+
+	The source of syscall json files is  https://syscall.sh/
+
+	To download via API:
+
+	curl -X 'GET' \
+	'https://api.syscall.sh/v1/syscalls/arm' \
+	-H 'accept: application/json' > arm.json
+
+	curl -X 'GET' \
+	'https://api.syscall.sh/v1/syscalls/arm64' \
+	-H 'accept: application/json' > arm64.json
+
+	curl -X 'GET' \
+	'https://api.syscall.sh/v1/syscalls/x86' \
+	-H 'accept: application/json' > x86.json
+
+	curl -X 'GET' \
+	'https://api.syscall.sh/v1/syscalls/x64' \
+	-H 'accept: application/json' > x64.json
+
+- Creating new script in Ghidra.
+
+From the top menu select;
+- Window > Script Manager
+- In the Ghidra Script Manager click the "Script Directories" icon in the toolbar and add the checked out repository as a path.
+  The script will appear in the "Syscall_linux_comments" category.
 
 
 
-From the syscall directory
 
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls/arm'   -H 'accept: application/json' > arm.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls/arm64'   -H 'accept: application/json' > arm64.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls/x86'   -H 'accept: application/json' > x86.json
-curl -X 'GET'   'https://api.syscall.sh/v1/syscalls/x64'   -H 'accept: application/json' > x64.json
+
+
