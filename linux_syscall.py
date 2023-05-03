@@ -212,7 +212,8 @@ def main():
                         continue
             instruction = instruction.getNext()
     else:
-        print("You have to give a message saying that the language is not supported.  Try except? ")
+        print"\n {} is not supported.".format(language)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
