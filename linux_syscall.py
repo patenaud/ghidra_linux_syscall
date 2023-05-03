@@ -1,40 +1,12 @@
-# Script to add comments to linux syscalls.  Supports arm, arm64, x86, x64.  Currently tested: ARM
+# Script to add comments to linux syscalls.  Supports ARM, AARCH64, x86, x64.
 # @Denis Patenaude
-# @category _NEW_
+# @category Syscall_linux_comments
 # @keybinding
 # @menupath
 # @toolbar
 
-'''
-Source of syscall json files: https://syscall.sh/
-To download via API:
-curl -X 'GET' \
-  'https://api.syscall.sh/v1/syscalls/arm' \
-  -H 'accept: application/json' > arm.json
-
-curl -X 'GET' \
-  'https://api.syscall.sh/v1/syscalls/arm64' \
-  -H 'accept: application/json' > arm64.json
-
-curl -X 'GET' \
-  'https://api.syscall.sh/v1/syscalls/x86' \
-  -H 'accept: application/json' > x86.json
-
-curl -X 'GET' \
-  'https://api.syscall.sh/v1/syscalls/x64' \
-  -H 'accept: application/json' > x64.json
-
-
-
-
-'''
 
 import sys
-# Not needed within the ghidra framework but kept for reference when using python console to test stuff.
-import ghidra
-# from ghidra.program.flatapi import FlatProgramAPI as FA
-
-from __main__ import *
 import os
 import json
 
