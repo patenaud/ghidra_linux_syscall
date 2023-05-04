@@ -121,7 +121,8 @@ def determine_and_clean_operand_type(operands, address, language, oabi=False):
         syscall_base = hex(0x90000)
         # old ARM syntax is 0x900000 + syscall. Check to if that is the case.
         if int(operand,16) >= int(syscall_base,16):
-            clean_key = arm_oabi_to_arm_eabi(operand)
+            key = arm_oabi_to_arm_eabi(operand)
+            clean_key = format_immediate_value(key)
             return 'immediate', clean_key
         else:
             print'\nExpected at least {} as syscall base.  Got {} instead.\n'.format(syscall_base, hex(operand))
