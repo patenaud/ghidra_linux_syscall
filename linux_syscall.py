@@ -133,22 +133,21 @@ def create_comments(current_address, op_type, syscall_name, hex_num):
     # TODO figure out how to delete previous comment or replace
     comment_exists = getEOLComment(current_address)
     previous_unknown_comment = 'syscall: Unable to determine. Review manually'
+    syscall_partial_comment = 'syscall: 0x'
     # if immediate value
     if op_type == 'immediate':
         if comment_exists is not None:
             original_comment = getEOLComment(current_address)
             # if already commented, pass
-            if 'syscall: 0x' in original_comment:
+            if syscall_partial_comment in original_comment:
                 pass
-            # if previous attempt was unable but new code allows it then append
+            # if previous attempt was unable but new future code functionality allows it, overwrite previous comment
             elif previous_unknown_comment in original_comment:
-                appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
-                new_comment = original_comment + ' - ' + appended_comment
+                new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
                 setEOLComment(current_address, new_comment)
-            # if another comment that's not ours then append
             else:
-                appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
-                new_comment = original_comment + ' - ' + appended_comment
+                prepended_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
+                new_comment = prepended_comment + ' - ' + original_comment
                 setEOLComment(current_address, new_comment)
         else:
             # if there's not previous comment, add new comment
@@ -246,21 +245,21 @@ def main():
                             if register in str(previous_operands):
                                 op_type = determine_and_clean_operand_type(previous_operands, previous_address,
                                                                            language, oabi=False)
-                    try:
-                        if op_type[0] == 'immediate':  # if immediate value.
-                            syscall_hex_str = op_type[1]
-                            syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
-                            create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-                    except TypeError:
-                        # Assign 'other' op_type if None is returned.
-                        op_type = 'other'
-                        syscall_name = None
-                        syscall_hex_str = None
-                        create_comments(current_address, op_type, str(syscall_name), syscall_hex_str)
-                    else:
-                        syscall_name = None
-                        syscall_hex_str = None
+                try:
+                    if op_type[0] == 'immediate':  # if immediate value.
+                        syscall_hex_str = op_type[1]
+                        syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
                         create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                except TypeError:
+                    # Assign 'other' op_type if None is returned.
+                    op_type = 'other'
+                    syscall_name = None
+                    syscall_hex_str = None
+                    create_comments(current_address, op_type, str(syscall_name), syscall_hex_str)
+                else:
+                    syscall_name = None
+                    syscall_hex_str = None
+                    create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
             # get next instruction
             instruction = instruction.getNext()
     else:

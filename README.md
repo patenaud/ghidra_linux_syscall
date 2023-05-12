@@ -18,7 +18,7 @@ TO DO
 Dependencies
 
 - Ghidra
-- curl
+- curl (optional)
 
 Setup
 
