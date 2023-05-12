@@ -48,11 +48,11 @@ def check_syscall_file_path(json_filename):
 
     # Check for existence of syscall directory.  Print message and exit if directory does not exist
     if os.path.isdir(syscall_dir) is False:
-        print'\n **** Please create "syscall" directory in {} and copy json files there. ****'.format(ghidra_dir)
+        print('\n **** Please create "syscall" directory in {} and copy json files there. ****').format(ghidra_dir)
         sys.exit(1)
         #  Check for existence of json file.  Print message and exit if file does not exist
     elif os.path.exists(full_path_file) is False:
-        print'\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n'.format(
+        print('\n ****  Cannot find or access "{}".  Please check that "{}" is in "{}" directory ****\n').format(
             json_filename, json_filename, syscall_dir)
         sys.exit(1)
     else:
@@ -97,7 +97,7 @@ def determine_and_clean_operand_type(operands, address, language, oabi=False):
         operands_list = str(operands).split(',')
         if len(operands_list) > 2:
             print("\nOperand length greater than 2. Please review manually.")
-            print "{} at address {}\n".format(operands, address)
+            print ("{} at address {}\n").format(operands, address)
         # else if only 1 operand
         else:
             # Check first character of string to see if prepended with '#'
@@ -124,28 +124,39 @@ def determine_and_clean_operand_type(operands, address, language, oabi=False):
             clean_key = format_immediate_value(key)
             return 'immediate', clean_key
         else:
-            print'\nExpected at least {} as syscall base.  Got {} instead.\n'.format(syscall_base, operand)
+            print('\nExpected at least {} as syscall base.  Got {} instead.\n').format(syscall_base, operand)
 
 
 def create_comments(current_address, op_type, syscall_name, hex_num):
     """ Modifies EOL comment based on syscall mapping. """
     # checks if comment exists, appends if so
+    # TODO figure out how to delete previous comment or replace
     comment_exists = getEOLComment(current_address)
+    previous_unknown_comment = 'syscall: Unable to determine. Review manually'
     # if immediate value
     if op_type == 'immediate':
         if comment_exists is not None:
             original_comment = getEOLComment(current_address)
-            if 'syscall: ' in original_comment:
+            # if already commented, pass
+            if 'syscall: 0x' in original_comment:
                 pass
+            # if previous attempt was unable but new code allows it then append
+            elif previous_unknown_comment in original_comment:
+                appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
+                new_comment = original_comment + ' - ' + appended_comment
+                setEOLComment(current_address, new_comment)
+            # if another comment that's not ours then append
             else:
                 appended_comment = 'syscall: ' + hex_num + ' -  ' + syscall_name
                 new_comment = original_comment + ' - ' + appended_comment
                 setEOLComment(current_address, new_comment)
         else:
+            # if there's not previous comment, add new comment
             new_comment = 'syscall: ' + hex_num + ' - ' + syscall_name
             setEOLComment(current_address, new_comment)
     # If not immediate value
     else:
+        # if it's not an immediate value we don't deal with it at this time. Maybe later.
         new_comment = 'syscall: Unable to determine. Review manually'
         setEOLComment(current_address, new_comment)
 
@@ -194,9 +205,10 @@ def main():
 
         while instruction is not None:
             mnemonic = instruction.getMnemonicString()
+            # normalize mnemonic to lowercase
             mnemonic = mnemonic.lower()
             current_address = instruction.getAddress()
-            # Initial instruction might not have a previous operand
+            # Initial instruction might not have a previous operand, so we try except
             try:
                 previous_operands = instruction.getPrevious()
                 previous_address = previous_operands.getAddress()
@@ -205,26 +217,35 @@ def main():
                 continue
             if mnemonic in valid_mnemonic:
                 for operand in valid_mnemonic[mnemonic]:
-                    # if multiple registers are possible. I.E. RAX and EAX
+                    # if anything but swi and syscall
                     if mnemonic != 'swi' and mnemonic != 'syscall':
                         if operand in str(instruction).split()[1]:
+                            # if multiple registers are possible
                             for register in registers:
                                 if register in str(previous_operands):
                                     op_type = determine_and_clean_operand_type(previous_operands, previous_address,
                                                                                language, oabi=False)
                     elif mnemonic == 'swi':
+                        # if '0x0'
                         if operand in str(instruction).split()[1]:
+                            # if multiple registers are possible
+                            for register in registers:
+                                if register in str(previous_operands):
+                                    op_type = determine_and_clean_operand_type(previous_operands, previous_address,
+                                                                           language, oabi=False)
+                        else:    # else it's oabi.  Does not use register
+                            actual_operand = str(instruction).split()[1]
                             syscall_base = hex(0x90000)
-                            if int(operand, 16) >= int(syscall_base, 16):
+                            # confirm that value is greater than or equal to 0x900000
+                            if int(actual_operand, 16) >= int(syscall_base, 16):
                                 op_type = determine_and_clean_operand_type(instruction, current_address,
                                                                            language, oabi=True)
                     elif mnemonic == 'syscall':
+                        # if multiple registers are possible. I.E. RAX and EAX
                         for register in registers:
                             if register in str(previous_operands):
                                 op_type = determine_and_clean_operand_type(previous_operands, previous_address,
                                                                            language, oabi=False)
-                    else:
-                        continue
                     try:
                         if op_type[0] == 'immediate':  # if immediate value.
                             syscall_hex_str = op_type[1]
@@ -240,10 +261,10 @@ def main():
                         syscall_name = None
                         syscall_hex_str = None
                         create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-
+            # get next instruction
             instruction = instruction.getNext()
     else:
-        print"\n {} is not supported.".format(language)
+        print("\n {} is not supported.").format(language)
         sys.exit(1)
 
 
