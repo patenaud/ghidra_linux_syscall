@@ -100,33 +100,31 @@ def determine_and_clean_operand_type(operands, address, language, oabi=False):
             print "{} at address {}\n".format(operands, address)
         # else if only 1 operand
         else:
-            if language == 'ARM':
-                # Check first character of string to see if prepended with '#'
-                if '#' in operands_list[1][0:1]:
-                    # check length of hex value.  Prepend 0 if length is 1 to match json file.
-                    clean_key = format_immediate_value(operands_list[1])
-                    return 'immediate', clean_key
-            elif '0x' in operands_list[1][0:2]:
+            # Check first character of string to see if prepended with '#'
+            if '#' == operands_list[1][0:1]:
+                # check length of hex value.  Prepend 0 if length is 1 to match json file.
+                clean_key = format_immediate_value(operands_list[1])
+                return 'immediate', clean_key
+            elif '0x' == operands_list[1][0:2]:
                 # check length of hex value.  Prepend 0 if length is 1 to match json file.
                 clean_key = format_immediate_value(operands_list[1])
                 return 'immediate', clean_key
             # if pointer that needs to be dereferenced
-            elif '[' in operands_list[1][0:1]:
+            elif '[' == operands_list[1][0:1]:
                 print('\n**** This value may need to be dereferenced manually. TODO for next version ****\n')
                 return 'pointer', None
             else:
                 return 'other', None
-    else:
+    elif oabi:
         operand = str(operands).split()[1]
         syscall_base = hex(0x90000)
         # old ARM syntax is 0x900000 + syscall. Check to if that is the case.
-        if int(operand,16) >= int(syscall_base,16):
+        if int(operand, 16) >= int(syscall_base, 16):
             key = arm_oabi_to_arm_eabi(operand)
             clean_key = format_immediate_value(key)
             return 'immediate', clean_key
         else:
-            print'\nExpected at least {} as syscall base.  Got {} instead.\n'.format(syscall_base, hex(operand))
-
+            print'\nExpected at least {} as syscall base.  Got {} instead.\n'.format(syscall_base, operand)
 
 
 def create_comments(current_address, op_type, syscall_name, hex_num):
@@ -191,13 +189,14 @@ def main():
         full_file_path = check_syscall_file_path(json_filename)
         # convert json file to dictionary
         syscall_dictionary = json_to_dict(full_file_path)
-        # valid mnemonic strings
-        valid_mnemonic = ['swi', 'SWI', 'svc', 'SVC', 'int', 'INT', 'syscall', 'SYSCALL']
+        # valid syscall mnemonic strings and operands
+        valid_mnemonic = {'swi': ['0x0', '0x900000'], 'svc': ['0'], 'int': ['0x80'], 'syscall': [None]}
 
         while instruction is not None:
             mnemonic = instruction.getMnemonicString()
+            mnemonic = mnemonic.lower()
             current_address = instruction.getAddress()
-            # Initial instruction will not have a previous operand
+            # Initial instruction might not have a previous operand
             try:
                 previous_operands = instruction.getPrevious()
                 previous_address = previous_operands.getAddress()
@@ -205,38 +204,41 @@ def main():
                 instruction = instruction.getNext()
                 continue
             if mnemonic in valid_mnemonic:
-                # check that value for syscall is 0x0. I.E. swi 0x0, int 0x0, etc
-                if str(instruction).split()[1] == '0x0':
+                for operand in valid_mnemonic[mnemonic]:
                     # if multiple registers are possible. I.E. RAX and EAX
-                    for register in registers:
-                        if register in str(previous_operands):
-                            # determine op type.  Immediate, pointer, other
-                            op_type = determine_and_clean_operand_type(previous_operands,
-                                                                       previous_address, language, oabi=False)
-                            try:
-                                if op_type[0] == 'immediate':  # if immediate value.
-                                    syscall_hex_str = op_type[1]
-                                    syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
-                                    create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-                            except TypeError:
-                                # Assign 'other' op_type if None is returned.
-                                op_type = 'other'
-                                syscall_name = None
-                                syscall_hex_str = None
-                                create_comments(current_address, op_type, str(syscall_name), syscall_hex_str)
-
-                            else:
-                                syscall_name = None
-                                syscall_hex_str = None
-                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-                        else:
-                            continue
-                else:
-                    # oabi uses swi + syscall base (0x900000) + syscall.  It does not use a register.
-                    if mnemonic is 'SWI' or 'swi':
-                        op_type = determine_and_clean_operand_type(instruction,current_address,language,oabi=True)
-                        syscall_hex_str = op_type[1]
-                        syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                    if mnemonic != 'swi' and mnemonic != 'syscall':
+                        if operand in str(instruction).split()[1]:
+                            for register in registers:
+                                if register in str(previous_operands):
+                                    op_type = determine_and_clean_operand_type(previous_operands, previous_address,
+                                                                               language, oabi=False)
+                    elif mnemonic == 'swi':
+                        if operand in str(instruction).split()[1]:
+                            syscall_base = hex(0x90000)
+                            if int(operand, 16) >= int(syscall_base, 16):
+                                op_type = determine_and_clean_operand_type(instruction, current_address,
+                                                                           language, oabi=True)
+                    elif mnemonic == 'syscall':
+                        for register in registers:
+                            if register in str(previous_operands):
+                                op_type = determine_and_clean_operand_type(previous_operands, previous_address,
+                                                                           language, oabi=False)
+                    else:
+                        continue
+                    try:
+                        if op_type[0] == 'immediate':  # if immediate value.
+                            syscall_hex_str = op_type[1]
+                            syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                            create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                    except TypeError:
+                        # Assign 'other' op_type if None is returned.
+                        op_type = 'other'
+                        syscall_name = None
+                        syscall_hex_str = None
+                        create_comments(current_address, op_type, str(syscall_name), syscall_hex_str)
+                    else:
+                        syscall_name = None
+                        syscall_hex_str = None
                         create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
 
             instruction = instruction.getNext()
