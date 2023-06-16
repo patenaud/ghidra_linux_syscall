@@ -7,12 +7,11 @@ Limitations
 
 At the moment;
 - it only supports the following processors: ARM, AARCH64, x86, and x64
-- it only checks the previous instruction before the syscall.
 - it only comments immediate syscall values.  I.E.  No dereference of pointers, etc.
+- Now check 5 previous operations for valid register immediate value
 
 TO DO
 
-- expand the backward checks from the syscall for immediate values
 - Add reporting on instructions found but not commented so they can be manually reviewed.
 
 Dependencies
