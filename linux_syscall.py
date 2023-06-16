@@ -159,7 +159,6 @@ def create_comments(current_address, op_type, syscall_name, hex_num):
         new_comment = 'syscall: Unable to determine. Review manually'
         setEOLComment(current_address, new_comment)
 
-
 def format_immediate_value(hex_string):
     """Some low hex values are a single hex character but the dictionary key is expecting 2 hex characters.
     I.E. Ghidra #0x0, dict key: 0x00 returns formatted hex value."""
@@ -175,6 +174,15 @@ def format_immediate_value(hex_string):
         syscall_hex_key = '0x' + hex_value
 
     return syscall_hex_key
+
+def build_previous_instruction_list(instruction):
+    prev_list = []
+    instruction_addr = instruction.getAddress()
+    prev_instruction = getInstructionAt(instruction_addr)
+    for i in range(4):
+       prev_instruction = prev_instruction.getPrevious()
+       prev_list.append(str(prev_instruction))
+    return prev_list
 
 
 def main():
@@ -224,14 +232,32 @@ def main():
                                 if register in str(previous_operands):
                                     op_type = determine_and_clean_operand_type(previous_operands, previous_address,
                                                                                language, oabi=False)
+                                    try:
+                                        if op_type[0] == 'immediate':  # if immediate value.
+                                            syscall_hex_str = op_type[1]
+                                            syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                            create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                                    except TypeError:
+                                        continue
+                                    
                     elif mnemonic == 'swi':
                         # if '0x0'
                         if operand in str(instruction).split()[1]:
                             # if multiple registers are possible
-                            for register in registers:
-                                if register in str(previous_operands):
-                                    op_type = determine_and_clean_operand_type(previous_operands, previous_address,
-                                                                           language, oabi=False)
+                            previous_operand_list = build_previous_instruction_list(instruction)
+                            for prev_operations in previous_operand_list:
+                                for register in registers:
+                                    if register in str(prev_operations):
+                                        op_type = determine_and_clean_operand_type(prev_operations, previous_address, #TODO mirror this if it works
+                                                                               language, oabi=False)
+                                        try:
+                                            if op_type[0] == 'immediate':  # if immediate value.
+                                                syscall_hex_str = op_type[1]
+                                                syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                                create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                                        except TypeError:
+                                            continue
+
                         else:    # else it's oabi.  Does not use register
                             actual_operand = str(instruction).split()[1]
                             syscall_base = hex(0x90000)
@@ -239,28 +265,39 @@ def main():
                             if int(actual_operand, 16) >= int(syscall_base, 16):
                                 op_type = determine_and_clean_operand_type(instruction, current_address,
                                                                            language, oabi=True)
+                                try:
+                                    if op_type[0] == 'immediate':  # if immediate value.
+                                        syscall_hex_str = op_type[1]
+                                        syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                        create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                                except TypeError:
+                                    continue
+                                
                     elif mnemonic == 'syscall':
                         # if multiple registers are possible. I.E. RAX and EAX
                         for register in registers:
                             if register in str(previous_operands):
                                 op_type = determine_and_clean_operand_type(previous_operands, previous_address,
                                                                            language, oabi=False)
-                try:
-                    if op_type[0] == 'immediate':  # if immediate value.
-                        syscall_hex_str = op_type[1]
-                        syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                try:
+                                    if op_type[0] == 'immediate':  # if immediate value.
+                                        syscall_hex_str = op_type[1]
+                                        syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                                        create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                                except TypeError:
+                                    continue
+                    else:
+                        op_type = ('other', None)
+                        syscall_name = None
+                        syscall_hex_str = None
                         create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-                except TypeError:
-                    # Assign 'other' op_type if None is returned.
-                    op_type = 'other'
-                    syscall_name = None
-                    syscall_hex_str = None
-                    create_comments(current_address, op_type, str(syscall_name), syscall_hex_str)
-                else:
-                    syscall_name = None
-                    syscall_hex_str = None
-                    create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
-            # get next instruction
+                    
+                    #if op_type[0] == 'immediate':  # if immediate value.
+                    #    syscall_hex_str = op_type[1]
+                    #    syscall_name = find_syscall_name(syscall_dictionary, syscall_hex_str)
+                    #    create_comments(current_address, op_type[0], str(syscall_name), syscall_hex_str)
+                            
+            
             instruction = instruction.getNext()
     else:
         print("\n {} is not supported.").format(language)
